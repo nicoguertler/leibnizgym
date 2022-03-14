@@ -24,7 +24,7 @@ INSTALL_REQUIRES = [
     "torch",
     "hydra-core>=1.1",
     "wandb",
-    'rl_games @ git+https://github.com/Denys88/rl_games'
+    'rl_games==1.0.1'
 ]
 
 # Installation operation
