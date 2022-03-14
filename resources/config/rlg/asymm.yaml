@@ -71,7 +71,7 @@ params:
       seq_length: 4
       minibatch_size: 8192 #16384
       mini_epochs: 4
-      lr: 5e-4
+      learning_rate: 5e-4
       clip_value: False
       normalize_input: False
       grad_norm: 1.0

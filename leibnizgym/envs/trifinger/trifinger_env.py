@@ -823,13 +823,6 @@ class TrifingerEnv(IsaacEnvBase):
             goal_handle = self._gym.create_actor(env_ptr, self._gym_assets["goal_object"], gymapi.Transform(),
                                                  "goal_object", env_index + self.num_instances, 0, 0)
             goal_object_idx = self._gym.get_actor_index(env_ptr, goal_handle, gymapi.DOMAIN_SIM)
-            # add force-torque sensor to fingertips
-            if self.config["enable_ft_sensors"]:
-                # enable joint force sensors
-                self._gym.enable_actor_dof_force_sensors(env_ptr, trifinger_actor)
-                # add force-torque sensor to finger tips
-                for fingertip_handle in self._fingertips_handles.values():
-                    self._gym.create_force_sensor(env_ptr, fingertip_handle, gymapi.Transform())
             # change settings of DOF
             self._gym.set_actor_dof_properties(env_ptr, trifinger_actor, robot_dof_props)
             # add color to instances
@@ -885,6 +878,11 @@ class TrifingerEnv(IsaacEnvBase):
             if self._fingertips_handles[frame_name] == gymapi.INVALID_HANDLE:
                 msg = f"Invalid handle received for frame: `{frame_name}`."
                 print_error(msg)
+
+        if self.config["enable_ft_sensors"]:
+            sensor_pose = gymapi.Transform()
+            for fingertip_handle in self._fingertips_handles.values():
+                self._gym.create_asset_force_sensor(trifinger_asset, fingertip_handle, sensor_pose)
         # extract the dof indices
         # Note: need to write actuated dofs manually since the system contains fixed joints as well which show up.
         for dof_name in self._robot_dof_indices.keys():

@@ -7,7 +7,7 @@
 
 # isaacgym-rlgpu
 from isaacgym import rlgpu
-from rlgpu.utils.config import set_np_formatting, set_seed
+from leibnizgym.utils.utils import set_np_formatting, set_seed
 # leibniz-gym: dump all environments for loading
 from leibnizgym.envs.trifinger import TrifingerEnv as Trifinger
 # leibnizgym
