@@ -396,9 +396,7 @@ class IsaacEnvBase:
         # extract the buffers to return
         obs = self._obs_buf
         rewards = self._reward_buf
-        # TODO: Why should this logical and be necessary?
-        #dones = torch.logical_and(self._reset_buf, self._goal_reset_buf)
-        dones = self._reset_buf
+        dones = torch.logical_or(self._reset_buf, self._goal_reset_buf)
         # return MDP
         return obs, rewards, dones, self._step_info
 

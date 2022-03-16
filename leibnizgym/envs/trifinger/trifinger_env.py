@@ -83,23 +83,11 @@ TRIFINGER_DEFAULT_CONFIG_DICT = {
         # Reward penalising the movement of fingers.
         "finger_move_penalty": {
             "activate": True,
-            "weight": -0.1,
+            "weight": -0.5,
         },
-        "object_dist": {
+        "object_keypoint": {
             "activate": True,
-            "weight": 2000
-        },
-        "object_rot": {
-            "activate": True,
-            "weight": 300
-        },
-        "object_rot_delta": {
-            "activate": True,
-            "weight": -250,
-        },
-        "object_move": {
-            "activate": True,
-            "weight": -750,
+            "weight": 40
         },
     },
     # Termination conditions
@@ -523,28 +511,9 @@ class TrifingerEnv(IsaacEnvBase):
                 self._fingertips_frames_state_history[0],
                 self._fingertips_frames_state_history[1],
             ),
-            "object_dist": terms["object_dist"].compute(
+            "object_keypoint": terms["object_keypoint"].compute(
                 self.config["sim"]["dt"],
-                self.env_steps_count,
                 self._object_state_history[0],
-                self._object_goal_poses_buf
-            ),
-            "object_rot": terms["object_rot"].compute(
-                self.config["sim"]["dt"],
-                self.env_steps_count,
-                self._object_state_history[0],
-                self._object_goal_poses_buf
-            ),
-            "object_rot_delta": terms["object_rot_delta"].compute(
-                self.config["sim"]["dt"],
-                self.env_steps_count,
-                self._object_state_history[0],
-                self._object_state_history[1],
-                self._object_goal_poses_buf
-            ),
-            "object_move": terms["object_move"].compute(
-                self._object_state_history[0],
-                self._object_state_history[1],
                 self._object_goal_poses_buf
             )
         }

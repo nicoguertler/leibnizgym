@@ -4,6 +4,7 @@
 @brief      Reward terms defined for Trifinger environment.
 """
 
+from typing import Tuple
 # leibnizgym
 from leibnizgym.utils.mdp import RewardTerm
 from leibnizgym.utils.torch_utils import quat_mul, quat_conjugate, quat_diff_rad
@@ -33,6 +34,42 @@ def lgsk_kernel(x: torch.Tensor, scale: float = 50.0) -> torch.Tensor:
     scaled = x * scale
     return 1.0 / (scaled.exp() + 2 + (-scaled).exp())
 
+@torch.jit.script
+def local_to_world_space(pos_offset_local: torch.Tensor, pose_global: torch.Tensor):
+    """ Convert a point from the local frame to the global frame
+    Args:
+        pos_offset_local: Point in local frame. Shape: [N, 3]
+        pose_global: The spatial pose of this point. Shape: [N, 7]
+    Returns:
+        Position in the global frame. Shape: [N, 3]
+    """
+    quat_pos_local = torch.cat(
+        [pos_offset_local, torch.zeros(pos_offset_local.shape[0], 1, dtype=torch.float32, device=pos_offset_local.device)],
+        dim=-1
+    )
+    quat_global = pose_global[:, 3:7]
+    quat_global_conj = quat_conjugate(quat_global)
+    pos_offset_global = quat_mul(quat_global, quat_mul(quat_pos_local, quat_global_conj))[:, 0:3]
+
+    result_pos_gloal = pos_offset_global + pose_global[:, 0:3]
+
+    return result_pos_gloal
+
+
+@torch.jit.script
+def gen_keypoints(pose: torch.Tensor, num_keypoints: int = 8, size: Tuple[float, float, float] = (0.065, 0.065, 0.065)):
+    num_envs = pose.shape[0]
+
+    keypoints_buf = torch.ones(num_envs, num_keypoints, 3, dtype=torch.float32, device=pose.device)
+
+    for i in range(num_keypoints):
+        # which dimensions to negate
+        n = [((i >> k) & 1) == 0 for k in range(3)]
+        corner_loc = [(1 if n[k] else -1) * s / 2 for k, s in enumerate(size)],
+        corner = torch.tensor(corner_loc, dtype=torch.float32, device=pose.device) * keypoints_buf[:, i, :]
+        keypoints_buf[:, i, :] = local_to_world_space(corner, pose)
+    return keypoints_buf
+
 
 class ObjectDistanceReward(RewardTerm):
     """Reward encouraging movement of the object towards the goal position."""
@@ -61,6 +98,31 @@ class ObjectDistanceReward(RewardTerm):
 
         dist = torch.norm(object_state[:, 0:3] - goal_state[:, 0:3], p=2, dim=-1)
         return self.weight * dt * sched_val * lgsk_kernel(dist)
+
+class ObjectKeypointReward(RewardTerm):
+    """Reward encouraging alignment of between keypoints on object and goal."""
+
+    def __init__(self, name: str = "object_keypoint", **kwargs):
+        self.name = name
+        # args
+        activate = kwargs.pop("activate")
+        weight = kwargs.pop("weight", 2000)
+
+        # initialize base class
+        super(ObjectKeypointReward, self).__init__(name, activate, weight)
+
+    @torch.jit.export
+    def compute(self, dt: float, object_state, goal_state) -> torch.Tensor:
+        object_keypoints = gen_keypoints(object_state[:, 0:7])
+        goal_keypoints = gen_keypoints(goal_state[:, 0:7])
+
+        delta = object_keypoints - goal_keypoints
+
+        dist_l2 = torch.norm(delta, p=2, dim=-1)
+
+        keypoints_kernel_sum = lgsk_kernel(dist_l2, scale=30.).mean(dim=-1)
+
+        return self.weight * dt * keypoints_kernel_sum
 
 class ObjectMoveReward(RewardTerm):
     """Encourages movement of object towards goal."""
@@ -268,6 +330,7 @@ REWARD_TERMS_MAPPING = {
     "finger_reach_object_rate": FingerReachObjectRatePenalty,
     "finger_move_penalty": FingertipMovementPenalty,
     "object_dist": ObjectDistanceReward,
+    "object_keypoint": ObjectKeypointReward,
     "object_rot": ObjectRotationReward,
     "object_rot_delta": ObjectRotationDeltaReward,
     "object_move": ObjectMoveReward,
