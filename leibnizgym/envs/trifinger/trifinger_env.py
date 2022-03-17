@@ -87,7 +87,7 @@ TRIFINGER_DEFAULT_CONFIG_DICT = {
         },
         "object_keypoint": {
             "activate": True,
-            "weight": 40
+            "weight": 2000
         },
     },
     # Termination conditions
