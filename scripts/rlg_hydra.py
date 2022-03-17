@@ -182,6 +182,59 @@ class TrifingerDifficulty4(Trifinger):
     })
 
 @dataclass
+class TrifingerDifficulty4Keypoints(Trifinger):
+    """Mode for testing to try to get the rotation reward up and running."""
+    task_difficulty = 4
+    episode_length = 750
+    reward_terms:Dict[str, Any] = field(default_factory=lambda: {
+        "finger_move_penalty":{
+            "activate": True,
+            "weight": -0.1,
+        },
+        "finger_reach_object_rate": {
+            "activate": True,
+            "norm_p": 2,
+            "weight": -250,
+            "thresh_sched_start": 0,
+            "thresh_sched_end": 1e7,
+        },
+        "object_dist": {
+            "activate": False,
+            "weight": 2000,
+            "thresh_sched_start": 0,
+            "thresh_sched_end": 10e10,
+        },
+        "object_rot": {
+            "activate": False,
+            "weight": 2000,
+            "epsilon": 0.01,
+            "scale": 3.0,
+            "thresh_sched_start": 1e7,
+            "thresh_sched_end": 1e10, # dont end!
+        },
+        "object_rot_delta": {
+            "activate": False,
+            "weight": -250
+        },
+        "object_move": {
+            "activate": False,
+            "weight": -750,
+        },
+        "object_keypoint": {
+            "activate": True,
+            "weight": 2000
+        },
+    })
+    termination_conditions: Dict[str, Any] = field(default_factory=lambda: {
+        "success": {
+            "activate": False,
+            "bonus": 5000.0,
+            "orientation_tolerance": 0.25,
+            "position_tolerance": 0.02,
+        }
+    })
+
+@dataclass
 class RLGConfig:
     """Configuration for RLGames."""
     asymmetric_obs: bool = MISSING  # argument specifying whether this config requires asymmetric states
@@ -292,6 +345,7 @@ def get_config_store():
     cs.store(group="gym", name="trifinger_difficulty_2", node=TrifingerDifficulty2)
     cs.store(group="gym", name="trifinger_difficulty_3", node=TrifingerDifficulty3)
     cs.store(group="gym", name="trifinger_difficulty_4", node=TrifingerDifficulty4)
+    cs.store(group="gym", name="trifinger_difficulty_4_keypoints", node=TrifingerDifficulty4Keypoints)
 
     # Don't need to instantiate the RLG configs as they are still yaml's - see corresponding directory.
     cs.store(name="config", node=Config)

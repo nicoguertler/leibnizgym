@@ -83,10 +83,26 @@ TRIFINGER_DEFAULT_CONFIG_DICT = {
         # Reward penalising the movement of fingers.
         "finger_move_penalty": {
             "activate": True,
-            "weight": -0.5,
+            "weight": -0.1,
+        },
+        "object_dist": {
+            "activate": True,
+            "weight": 2000
+        },
+        "object_rot": {
+            "activate": True,
+            "weight": 300
+        },
+        "object_rot_delta": {
+            "activate": True,
+            "weight": -250,
+        },
+        "object_move": {
+            "activate": True,
+            "weight": -750,
         },
         "object_keypoint": {
-            "activate": True,
+            "activate": False,
             "weight": 2000
         },
     },
@@ -134,7 +150,7 @@ class TrifingerEnv(IsaacEnvBase):
     # Constants for limits
     # Ref: https://github.com/rr-learning/rrc_simulation/blob/master/python/rrc_simulation/trifinger_platform.py#L68
     # maximum joint torque (in N-m) applicable on each actuator
-    _max_torque_Nm = 0.36
+    _max_torque_Nm = 0.36 #TODO: Increase!
     # maximum joint velocity (in rad/s) on each actuator
     _max_velocity_radps = 10
     # limits of the robot (mapped later: str -> torch.tensor)
@@ -510,6 +526,30 @@ class TrifingerEnv(IsaacEnvBase):
                 self.config["sim"]["dt"],
                 self._fingertips_frames_state_history[0],
                 self._fingertips_frames_state_history[1],
+            ),
+            "object_dist": terms["object_dist"].compute(
+                self.config["sim"]["dt"],
+                self.env_steps_count,
+                self._object_state_history[0],
+                self._object_goal_poses_buf
+            ),
+            "object_rot": terms["object_rot"].compute(
+                self.config["sim"]["dt"],
+                self.env_steps_count,
+                self._object_state_history[0],
+                self._object_goal_poses_buf
+            ),
+            "object_rot_delta": terms["object_rot_delta"].compute(
+                self.config["sim"]["dt"],
+                self.env_steps_count,
+                self._object_state_history[0],
+                self._object_state_history[1],
+                self._object_goal_poses_buf
+            ),
+            "object_move": terms["object_move"].compute(
+                self._object_state_history[0],
+                self._object_state_history[1],
+                self._object_goal_poses_buf
             ),
             "object_keypoint": terms["object_keypoint"].compute(
                 self.config["sim"]["dt"],
