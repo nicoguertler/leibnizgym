@@ -189,7 +189,7 @@ class TrifingerDifficulty4Keypoints(Trifinger):
     reward_terms:Dict[str, Any] = field(default_factory=lambda: {
         "finger_move_penalty":{
             "activate": True,
-            "weight": -0.1,
+            "weight": -0.02,
         },
         "finger_reach_object_rate": {
             "activate": True,
