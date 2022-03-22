@@ -65,6 +65,7 @@ class Trifinger(EnvConfig):
     # observation settings
     asymmetric_obs: bool = False
     normalize_obs: bool = True
+    keypoint_obs: bool = False
     # reset distribution settings
     apply_safety_damping: bool = True
     command_mode: str = "torque"
@@ -183,7 +184,7 @@ class TrifingerDifficulty4(Trifinger):
 
 @dataclass
 class TrifingerDifficulty4Keypoints(Trifinger):
-    """Mode for testing to try to get the rotation reward up and running."""
+    """TriFinger difficulty 4 with keypoint rewards."""
     task_difficulty = 4
     episode_length = 750
     reward_terms:Dict[str, Any] = field(default_factory=lambda: {
@@ -233,6 +234,11 @@ class TrifingerDifficulty4Keypoints(Trifinger):
             "position_tolerance": 0.02,
         }
     })
+
+@dataclass
+class TrifingerDifficulty4KeypointsPlusObs(TrifingerDifficulty4Keypoints):
+    """TriFinger difficulty 4 with keypoint rewards and obvservations."""
+    keypoint_obs = True
 
 @dataclass
 class RLGConfig:
@@ -346,6 +352,7 @@ def get_config_store():
     cs.store(group="gym", name="trifinger_difficulty_3", node=TrifingerDifficulty3)
     cs.store(group="gym", name="trifinger_difficulty_4", node=TrifingerDifficulty4)
     cs.store(group="gym", name="trifinger_difficulty_4_keypoints", node=TrifingerDifficulty4Keypoints)
+    cs.store(group="gym", name="trifinger_difficulty_4_keypoints_plus_obs", node=TrifingerDifficulty4KeypointsPlusObs)
 
     # Don't need to instantiate the RLG configs as they are still yaml's - see corresponding directory.
     cs.store(name="config", node=Config)

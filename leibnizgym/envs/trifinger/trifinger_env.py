@@ -13,7 +13,7 @@ from leibnizgym.utils.torch_utils import saturate, unscale_transform, scale_tran
 from leibnizgym.envs.env_base import IsaacEnvBase
 # leibnizgym - trifinger
 from leibnizgym.envs.trifinger.sample import *
-from leibnizgym.envs.trifinger.rewards import REWARD_TERMS_MAPPING
+from leibnizgym.envs.trifinger.rewards import REWARD_TERMS_MAPPING, gen_keypoints
 from leibnizgym.envs.trifinger.utils import TrifingerDimensions, CuboidalObject
 # python
 from typing import Union, List, Tuple, Deque
@@ -44,6 +44,8 @@ TRIFINGER_DEFAULT_CONFIG_DICT = {
     "normalize_obs": True,
     # Whether to denormalize action from [-1, 1] or not.
     "normalize_action": True,
+    # Whether to use keypoint observations instead of position and quaternion
+    "keypoint_obs": False,
     # Configuration for resetting the MDP
     "reset_distribution": {
         # Defines how to reset the robot joint state
@@ -145,6 +147,7 @@ class TrifingerEnv(IsaacEnvBase):
     # physical dimensions of the object
     # TODO: Make object dimensions configurable.
     _object_dims = CuboidalObject(0.065)
+    _cuboid_half_diam = np.sqrt(2.)*0.065
     # dimensions of the system
     _dims = TrifingerDimensions
     # Constants for limits
@@ -214,6 +217,11 @@ class TrifingerEnv(IsaacEnvBase):
             high=np.full(_dims.VelocityDim.value, 0.5, dtype=np.float32),
             default=np.zeros(_dims.VelocityDim.value, dtype=np.float32)
         ),
+        "keypoints": SimpleNamespace(
+            low=np.array([-0.3 - _cuboid_half_diam, -0.3 - _cuboid_half_diam, 0]*8, dtype=np.float32),
+            high=np.array([0.3 + _cuboid_half_diam, 0.3 + _cuboid_half_diam, 0.3 + _cuboid_half_diam]*8, dtype=np.float32),
+            default=np.array([0, 0, _object_dims.min_height], dtype=np.float32)
+        ),
     }
     # PD gains for the robot (mapped later: str -> torch.tensor)
     # Ref: https://github.com/rr-learning/rrc_simulation/blob/master/python/rrc_simulation/sim_finger.py#L49-L65
@@ -275,17 +283,24 @@ class TrifingerEnv(IsaacEnvBase):
         # Enable force torque sensor if asymmetric
         if trifinger_config["asymmetric_obs"]:
             trifinger_config["enable_ft_sensors"] = True
+        # Whether to use keypoints in obs
+        self.keypoint_obs = trifinger_config["keypoint_obs"]
+
         # define spaces for the environment
 
         # action
         action_dim = self._dims.JointTorqueDim.value if config['command_mode'] != "position_impedance" else self._dims.JointTorqueDim.value * 2
 
         # observations
+        if self.keypoint_obs:
+            self.obj_pose_dim = self._dims.ObjectKeypointPoseDim.value
+        else:
+            self.obj_pose_dim = self._dims.ObjectPoseDim.value
         obs_spec = {
             "robot_q": self._dims.GeneralizedCoordinatesDim.value,
             "robot_u": self._dims.GeneralizedVelocityDim.value,
-            "object_q": self._dims.ObjectPoseDim.value,
-            "object_q_des": self._dims.ObjectPoseDim.value,
+            "object_q": self.obj_pose_dim,
+            "object_q_des": self.obj_pose_dim,
             "command": action_dim
         }
         # state
@@ -294,8 +309,8 @@ class TrifingerEnv(IsaacEnvBase):
                 # observations spec
                 "robot_q": self._dims.GeneralizedCoordinatesDim.value,
                 "robot_u": self._dims.GeneralizedVelocityDim.value,
-                "object_q": self._dims.ObjectPoseDim.value,
-                "object_q_des": self._dims.ObjectPoseDim.value,
+                "object_q": self.obj_pose_dim,
+                "object_q_des": self.obj_pose_dim,
                 "command": action_dim,
                 # extra observations (added separately to make computations simpler)
                 "object_u": self._dims.ObjectVelocityDim.value,
@@ -669,24 +684,40 @@ class TrifingerEnv(IsaacEnvBase):
         else:
             obs_action_scale = self._action_scale
         # Note: This is order sensitive.
-        self._observations_scale.low = torch.cat([
-            self._robot_limits["joint_position"].low,
-            self._robot_limits["joint_velocity"].low,
-            self._object_limits["position"].low,
-            self._object_limits["orientation"].low,
-            self._object_limits["position"].low,
-            self._object_limits["orientation"].low,
-            obs_action_scale.low
-        ])
-        self._observations_scale.high = torch.cat([
-            self._robot_limits["joint_position"].high,
-            self._robot_limits["joint_velocity"].high,
-            self._object_limits["position"].high,
-            self._object_limits["orientation"].high,
-            self._object_limits["position"].high,
-            self._object_limits["orientation"].high,
-            obs_action_scale.high
-        ])
+        if self.keypoint_obs:
+            self._observations_scale.low = torch.cat([
+                self._robot_limits["joint_position"].low,
+                self._robot_limits["joint_velocity"].low,
+                self._object_limits["keypoints"].low,
+                self._object_limits["keypoints"].low,
+                obs_action_scale.low
+            ])
+            self._observations_scale.high = torch.cat([
+                self._robot_limits["joint_position"].high,
+                self._robot_limits["joint_velocity"].high,
+                self._object_limits["keypoints"].high,
+                self._object_limits["keypoints"].high,
+                obs_action_scale.high
+            ])
+        else:
+            self._observations_scale.low = torch.cat([
+                self._robot_limits["joint_position"].low,
+                self._robot_limits["joint_velocity"].low,
+                self._object_limits["position"].low,
+                self._object_limits["orientation"].low,
+                self._object_limits["position"].low,
+                self._object_limits["orientation"].low,
+                obs_action_scale.low
+            ])
+            self._observations_scale.high = torch.cat([
+                self._robot_limits["joint_position"].high,
+                self._robot_limits["joint_velocity"].high,
+                self._object_limits["position"].high,
+                self._object_limits["orientation"].high,
+                self._object_limits["position"].high,
+                self._object_limits["orientation"].high,
+                obs_action_scale.high
+            ])
         # State scale for the MDP
         if self.config["asymmetric_obs"]:
             # finger tip scaling
@@ -1014,12 +1045,20 @@ class TrifingerEnv(IsaacEnvBase):
         self._obs_buf[:, start_offset:end_offset] = self._dof_velocity
         # object pose
         start_offset = end_offset
-        end_offset = start_offset + self._dims.ObjectPoseDim.value
-        self._obs_buf[:, start_offset:end_offset] = self._object_state_history[0][:, 0:7]
+        end_offset = start_offset + self.obj_pose_dim
+        if self.keypoint_obs:
+            keypoints = gen_keypoints(self._object_state_history[0][:, 0:7])
+            self._obs_buf[:, start_offset:end_offset] = torch.reshape(keypoints, (-1, 24))
+        else:
+            self._obs_buf[:, start_offset:end_offset] = self._object_state_history[0][:, 0:7]
         # object desired pose
         start_offset = end_offset
-        end_offset = start_offset + self._dims.ObjectPoseDim.value
-        self._obs_buf[:, start_offset:end_offset] = self._object_goal_poses_buf
+        end_offset = start_offset + self.obj_pose_dim
+        if self.keypoint_obs:
+            keypoints = gen_keypoints(self._object_goal_poses_buf)
+            self._obs_buf[:, start_offset:end_offset] = torch.reshape(keypoints, (-1, 24))
+        else:
+            self._obs_buf[:, start_offset:end_offset] = self._object_goal_poses_buf
         # previous action from policy
         start_offset = end_offset
         end_offset = start_offset + self.get_action_dim()

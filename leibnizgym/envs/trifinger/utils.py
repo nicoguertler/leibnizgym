@@ -42,6 +42,7 @@ class TrifingerDimensions(enum.Enum):
     GeneralizedVelocityDim = JointVelocityDim
     # for objects
     ObjectPoseDim = 7
+    ObjectKeypointPoseDim = 8*3
     ObjectVelocityDim = 6
 
 
